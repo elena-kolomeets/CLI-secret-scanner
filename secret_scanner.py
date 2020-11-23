@@ -61,8 +61,11 @@ def ignore(user_path):
 
 
 def main(user_path, all_files):
-    secret_words = ['password:', 'PASSWORD:', 'Password:', 'password =', 'PASSWORD =', 'Password =',
-                    'key:', 'KEY:', 'Key:', 'key =', 'KEY =', 'Key =']
+    secret_words = ['password:', 'PASSWORD:', 'Password:', 'password :', 'PASSWORD :', 'Password :',
+                    'password =', 'PASSWORD =', 'Password =', 'password=', 'PASSWORD=', 'Password=',
+                    'key:', 'KEY:', 'Key:', 'key :', 'KEY :', 'Key :',
+                    'key =', 'KEY =', 'Key =', 'key=', 'KEY=', 'Key=',
+    ]
     os.path.normpath(user_path)
     if os.path.isdir(user_path):
         # get a list of files added to .gitignore (empty list if no .gitignore) to exclude them from scanning
@@ -82,10 +85,11 @@ def main(user_path, all_files):
                         for file_line in f:
                             for word in secret_words:
                                 if word in file_line:
-                                    file_list.append({'file_name': os.path.normpath(name), 'file_content': file_line})
+                                    file_list.append({'file_name': os.path.relpath(name, start=user_path),
+                                                      'file_content': file_line})
                 except UnicodeDecodeError:
                     # creating the list of files that could not be open
-                    not_open.append(f"Could not open the file {os.path.relpath(name)}")
+                    not_open.append(f"Could not open the file {os.path.relpath(name, start=user_path)}")
                     continue
             # if --all flag is used (to scan .gitignore files as well)
             else:
@@ -96,12 +100,16 @@ def main(user_path, all_files):
                         for file_line in f:
                             for word in secret_words:
                                 if word in file_line:
-                                    file_list.append({'file_name': os.path.normpath(name), 'file_content': file_line})
+                                    file_list.append({'file_name': os.path.relpath(name, start=user_path),
+                                                      'file_content': file_line})
                 except UnicodeDecodeError:
                     # creating the list of files that could not be open
-                    not_open.append(f"Could not open the file {os.path.relpath(name)}")
+                    not_open.append(f"Could not open the file {os.path.relpath(name, start=user_path)}")
                     continue
-        return file_list
+        if not file_list:
+            return "No secrets found!"
+        else:
+            return file_list
     else:
         return "Specified path not found. Try another one."
 

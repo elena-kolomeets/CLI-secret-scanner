@@ -4,7 +4,7 @@ import argparse
 
 parser = argparse.ArgumentParser(
     prog='Secret Scanner',
-    usage='This tool is used for scanning project directory for secrets that should not be shared. '
+    usage='This tool is used for scanning project directory for secrets that should not be shared.'
           'Use -h/--help flag to get more information.',
     description='The program scans the files of the current or specified (with -p/--path) directory for secrets '
                 '(password, secret key etc.) that have not been hidden (e.g. added to .env). '
@@ -41,7 +41,6 @@ def ignore(user_path):
     Function that checks if dir contains .gitignore
     and returns a list of all ignored files from all subdirs
     """
-    # MODIFY THE FUNCTION - NO LOOPS ?
     gitignore = []
     ignore_list = []
     if os.path.exists(user_path + '/.gitignore'):
@@ -62,27 +61,47 @@ def ignore(user_path):
 
 
 def main(user_path, all_files):
+    secret_words = ['password:', 'PASSWORD:', 'Password:', 'password =', 'PASSWORD =', 'Password =',
+                    'key:', 'KEY:', 'Key:', 'key =', 'KEY =', 'Key =']
     os.path.normpath(user_path)
-    scan_ignore = []
     if os.path.isdir(user_path):
-        # check if -a/-all flag is used to scan all files
-        if not all_files:
-            # get a list of files added to .gitignore (empty list if no .gitignnore)
-            # to exclude them from scanning
-            scan_ignore = ignore(user_path)
+        # get a list of files added to .gitignore (empty list if no .gitignore) to exclude them from scanning
+        scan_ignore = ignore(user_path)
 
-        # scanning the folder for secrets: adding file names and contents to list of dictionaries
+        # scanning the folder for secrets: adding file names
+        # and their lines with secrets to list of dictionaries
         file_list = []
+        not_open = []
         for name in glob.glob(user_path+'/**/*', recursive=True):
-            if os.path.isdir(name) or os.path.normpath(name) in scan_ignore:
-                continue
-            try:
-                with open(name, mode='r', encoding='utf-8') as f:
-                    file_list.append({'file_name': os.path.normpath(name), 'file_content': f.read()})
-            except UnicodeDecodeError:
-                # return f"Could not open the file {os.path.relpath(name)}"
-                continue
-        return [file['file_name'] for file in file_list]
+            # check if --all flag is missing (to exclude all .gitignore files)
+            if not all_files:
+                if os.path.isdir(name) or os.path.normpath(name) in scan_ignore:
+                    continue
+                try:
+                    with open(name, mode='r', encoding='utf-8') as f:
+                        for file_line in f:
+                            for word in secret_words:
+                                if word in file_line:
+                                    file_list.append({'file_name': os.path.normpath(name), 'file_content': file_line})
+                except UnicodeDecodeError:
+                    # creating the list of files that could not be open
+                    not_open.append(f"Could not open the file {os.path.relpath(name)}")
+                    continue
+            # if --all flag is used (to scan .gitignore files as well)
+            else:
+                if os.path.isdir(name):
+                    continue
+                try:
+                    with open(name, mode='r', encoding='utf-8') as f:
+                        for file_line in f:
+                            for word in secret_words:
+                                if word in file_line:
+                                    file_list.append({'file_name': os.path.normpath(name), 'file_content': file_line})
+                except UnicodeDecodeError:
+                    # creating the list of files that could not be open
+                    not_open.append(f"Could not open the file {os.path.relpath(name)}")
+                    continue
+        return file_list
     else:
         return "Specified path not found. Try another one."
 

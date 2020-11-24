@@ -1,5 +1,7 @@
 import glob
 import os
+import sys
+import json
 import argparse
 
 parser = argparse.ArgumentParser(
@@ -9,11 +11,11 @@ parser = argparse.ArgumentParser(
     description='The program scans the files of the current or specified (with -p/--path) directory for secrets '
                 '(password, secret key etc.) that have not been hidden (e.g. added to .env). '
                 'By default files added to .gitignore are NOT scanned. You can change it by using the "--all" flag. '
-                'After scanning a summary of the results is given'
-                'in "secret_scanner_results.txt" file (generated in the scanned dir and added to .gitignore) '
+                'After scanning a summary of the results is given in "secret_scanner_results.txt" file '
+                'and in case secrets are found the detailed report is given in "secret_scanner_detailed_report.txt" file'
+                '(both generated in the scanned dir and added to .gitignore) '
                 'and in the terminal (if run in the terminal).',
-    epilog='Thank you for using Secret Scanner! Hopefully your secrets are safe now.'
-           'The author is Elena Kolomeets (GitHub elena-kolomeets).',
+    epilog='The author is Elena Kolomeets (GitHub elena-kolomeets).',
 )
 parser.add_argument(
     '-p', '--path',
@@ -43,23 +45,23 @@ def ignore(user_path):
     if os.path.exists(user_path + '/.gitignore'):
         with open(user_path + '/.gitignore') as g:
             for line in g:
-                if '\n' in line:
-                    line = line[:-1]
-                if line[-1] == '/':
-                    line = line + '*'
-                if line[:2] == '**':
-                    line = line[2:]
-                gitignore.append(line)
-        # print(gitignore)
+                if line != '' and line != '\n':
+                    if '\n' in line:
+                        line = line[:-1]
+                    if line[-1] == '/':
+                        line = line + '*'
+                    if line[:2] == '**':
+                        line = line[2:]
+                    gitignore.append(line)
         for i in gitignore:
             i = user_path + '/**/' + i + '*'
             for j in glob.glob(i, recursive=True):
                 ignore_list.append(os.path.relpath(j, start=user_path))
-        # print(ignore_list)
     return ignore_list
 
 
 def main(user_path, all_files):
+    file_list = []
     os.path.normpath(user_path)
     if os.path.isdir(user_path):
         # generate a list of secret words to scan for
@@ -78,7 +80,7 @@ def main(user_path, all_files):
 
         # scanning the folder for secrets: adding file names
         # and their lines with secrets to list of dictionaries
-        file_list, not_open = [], []
+        not_open = []
 
         # scanning for files starting with '.' as they are not matched by default with glob.glob
         for dot_name in glob.glob(user_path+'/**/.*', recursive=True):
@@ -93,12 +95,14 @@ def main(user_path, all_files):
                                                   'file_line': dfile_line})
             except Exception:
                 # creating the list of files that could not be open
-                not_open.append(f"Could not open the file {os.path.relpath(dot_name, start=user_path)}")
+                not_open.append(os.path.relpath(dot_name, start=user_path))
                 continue
 
         # scanning the rest of the files
         for name in glob.glob(user_path+'/**/*', recursive=True):
-            if os.path.isdir(name) or os.path.relpath(name, start=user_path) in scan_ignore:
+            if os.path.isdir(name) or os.path.relpath(name, start=user_path) in scan_ignore \
+                    or os.path.basename(name) == 'secret_scanner_results.txt' \
+                    or os.path.basename(name) == 'secret_scanner_detailed_report.txt':
                 continue
             try:
                 with open(name, mode='r', encoding='utf-8') as f:
@@ -109,15 +113,33 @@ def main(user_path, all_files):
                                                   'file_line': file_line})
             except Exception:
                 # creating the list of files that could not be open
-                not_open.append(f"Could not open the file {os.path.relpath(name, start=user_path)}")
+                not_open.append(os.path.relpath(name, start=user_path))
                 continue
         if not file_list:
-            return "No secrets found, good job! Keep an eye on them anyway as no tool is perfect."
+            output = "No secrets found, good job! Keep an eye on them anyway as no tool is perfect."
         else:
-            return file_list
+            output = f"The scanner found {len(file_list)} possible secret exposure(s).\n" +\
+                     "\nThe following files could not be open and scanned: " + ', '.join(not_open) + '\n' +\
+                     "\nYou can see the detailed report in the 'secret_scanner_detailed_report.txt' file " +\
+                     "\n(generated in the scanned dir and added to .gitignore).\n" +\
+                     "\nThank you for using Secret Scanner! Hopefully your secrets will  be safe now."
     else:
-        return "The given path is not found. Shall we try another one?"
+        output = "The given path is not found. Shall we try another one?"
+
+    # writing the scan output to the terminal and 'secret_scanner_results.txt'
+    print(output, file=sys.stdout)
+    with open(user_path+'/'+'secret_scanner_results.txt', mode='w') as f:
+        f.write(output)
+    # creating the file with detailed report of the scan results
+    with open(user_path + '/' + 'secret_scanner_detailed_report.txt', mode='w') as f1:
+        for results in file_list:
+            json.dump(results, f1, indent=2)
+    # adding result and report files to .gitignore
+    with open(user_path + '/.gitignore', mode='a+') as g:
+        g.seek(0)
+        if 'secret_scanner_results.txt\n' not in g and 'secret_scanner_detailed_report.txt\n' not in g:
+            g.write('secret_scanner_results.txt\n'+'secret_scanner_detailed_report.txt\n')
 
 
 if __name__ == '__main__':
-    print(main(args.path, args.all))
+    main(args.path, args.all)

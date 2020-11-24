@@ -7,3 +7,5 @@ dist/
 **bin/
 *.sh
 venv/
+secret_scanner_results.txt
+secret_scanner_detailed_report.txt

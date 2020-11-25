@@ -7,14 +7,14 @@ import argparse
 parser = argparse.ArgumentParser(
     prog='Secret Scanner',
     usage='This tool is used for scanning project directory for secrets that should not be shared.'
-          'Use -h/--help flag to get more information.',
+          'Run .exe or .py file in your terminal. Use -h/--help flag to get more information.',
     description='The program scans the files of the current or specified (with -p/--path) directory for secrets '
                 '(password, secret key etc.) that have not been hidden (e.g. added to .env). '
                 'By default files added to .gitignore are NOT scanned. You can change it by using the "--all" flag. '
                 'After scanning a summary of the results is given in "secret_scanner_results.txt" file '
                 'and in case secrets are found the detailed report is given in "secret_scanner_detailed_report.txt" file'
                 '(both generated in the scanned dir and added to .gitignore) '
-                'and in the terminal (if run in the terminal).',
+                'and in the terminal.',
     epilog='The author is Elena Kolomeets (GitHub elena-kolomeets).',
 )
 parser.add_argument(
@@ -39,7 +39,9 @@ args = parser.parse_args()
 def ignore(user_path):
     """
     Function that checks if dir contains .gitignore
-    and returns a list of all ignored files from all subdirs
+    and returns a list of all ignored files from all subdirs.
+    :param user_path: the path given by the user with -p/--path parameter
+    :return: a list of files to ignore while scanning
     """
     gitignore, ignore_list = [], []
     if os.path.exists(user_path + '/.gitignore'):
@@ -60,85 +62,108 @@ def ignore(user_path):
     return ignore_list
 
 
-def main(user_path, all_files):
+def generate_words():
+    """
+    Generate a list of words to search for while scanning for secrets.
+    :return: the list of secret words and expressions
+    """
+    words_case, secret_words = [], []
+    for word in ['password', 'pass', 'key', 'credential', 'database_url', 'database-url', 'db_url', 'db-url']:
+        words_case.extend((word, word.upper(), word.capitalize()))
+    for word in words_case:
+        secret_words.extend((word + ':', word + ' :', word + '=', word + ' =', word + ' is'))
+    return secret_words
+
+
+def scan(userpath, scan_ignore, secret_words):
+    """
+    Scanning the folder for secrets: scanning each folder and subfolder
+    and adding file names and their lines with secrets to list of dictionaries
+    :param userpath:
+    :param scan_ignore: flag
+    :param secret_words: list of secret words to scan for
+    :return: file_list: list of dictionaries with the results,
+             not_open: list of files that could not be open
+    """
+
     file_list = []
-    os.path.normpath(user_path)
-    if os.path.isdir(user_path):
-        # generate a list of secret words to scan for
-        words_case, secret_words = [], []
-        for word in ['password', 'pass', 'key', 'credential', 'database_url', 'database-url', 'db_url', 'db-url']:
-            words_case.extend((word, word.upper(), word.capitalize()))
-        for word in words_case:
-            secret_words.extend((word + ':', word + ' :', word + '=', word + ' =', word + ' is'))
+    not_open = []
+    for name in glob.glob(userpath, recursive=True):
+        if os.path.isdir(name) or os.path.relpath(name, start=userpath)[6:] in scan_ignore \
+                or os.path.basename(name) == 'secret_scanner_results.txt' \
+                or os.path.basename(name) == 'secret_scanner_detailed_report.txt':
+            continue
+        try:
+            with open(name, mode='r', encoding='utf-8') as f:
+                for file_line in f:
+                    for secret_word in secret_words:
+                        if secret_word in file_line:
+                            file_list.append({'file_name': os.path.relpath(name, start=userpath)[6:],
+                                              'file_line': file_line})
+        except Exception:
+            # creating the list of files that could not be open
+            not_open.append(os.path.relpath(name, start=userpath)[6:])
+            continue
+    return file_list, not_open
 
-        # check if --all flag is used (to include all .gitignore files)
-        # get a list of files added to .gitignore (empty list if no .gitignore) to exclude them from scanning
-        if not all_files:
-            scan_ignore = ignore(user_path)
-        else:
-            scan_ignore = []
 
-        # scanning the folder for secrets: adding file names
-        # and their lines with secrets to list of dictionaries
-        not_open = []
-
-        # scanning for files starting with '.' as they are not matched by default with glob.glob
-        for dot_name in glob.glob(user_path+'/**/.*', recursive=True):
-            if os.path.relpath(dot_name, start=user_path) in scan_ignore:
-                continue
-            try:
-                with open(dot_name, mode='r', encoding='utf-8') as df:
-                    for dfile_line in df:
-                        for secret_word in secret_words:
-                            if secret_word in dfile_line:
-                                file_list.append({'file_name': os.path.relpath(dot_name, start=user_path),
-                                                  'file_line': dfile_line})
-            except Exception:
-                # creating the list of files that could not be open
-                not_open.append(os.path.relpath(dot_name, start=user_path))
-                continue
-
-        # scanning the rest of the files
-        for name in glob.glob(user_path+'/**/*', recursive=True):
-            if os.path.isdir(name) or os.path.relpath(name, start=user_path) in scan_ignore \
-                    or os.path.basename(name) == 'secret_scanner_results.txt' \
-                    or os.path.basename(name) == 'secret_scanner_detailed_report.txt':
-                continue
-            try:
-                with open(name, mode='r', encoding='utf-8') as f:
-                    for file_line in f:
-                        for secret_word in secret_words:
-                            if secret_word in file_line:
-                                file_list.append({'file_name': os.path.relpath(name, start=user_path),
-                                                  'file_line': file_line})
-            except Exception:
-                # creating the list of files that could not be open
-                not_open.append(os.path.relpath(name, start=user_path))
-                continue
-        if not file_list:
-            output = "No secrets found, good job! Keep an eye on them anyway as no tool is perfect."
-        else:
-            output = f"The scanner found {len(file_list)} possible secret exposure(s).\n" +\
-                     "\nThe following files could not be open and scanned: " + ', '.join(not_open) + '\n' +\
-                     "\nYou can see the detailed report in the 'secret_scanner_detailed_report.txt' file " +\
-                     "\n(generated in the scanned dir and added to .gitignore).\n" +\
-                     "\nThank you for using Secret Scanner! Hopefully your secrets will  be safe now."
-    else:
-        output = "The given path is not found. Shall we try another one?"
-
+def write_output(user_path, file_list, output):
     # writing the scan output to the terminal and 'secret_scanner_results.txt'
     print(output, file=sys.stdout)
-    with open(user_path+'/'+'secret_scanner_results.txt', mode='w') as f:
+    with open(user_path + '/' + 'secret_scanner_results.txt', mode='w') as f:
         f.write(output)
+
     # creating the file with detailed report of the scan results
-    with open(user_path + '/' + 'secret_scanner_detailed_report.txt', mode='w') as f1:
-        for results in file_list:
-            json.dump(results, f1, indent=2)
+    if file_list:
+        with open(user_path + '/' + 'secret_scanner_detailed_report.txt', mode='w') as f1:
+            for results in file_list:
+                json.dump(results, f1, indent=2)
     # adding result and report files to .gitignore
     with open(user_path + '/.gitignore', mode='a+') as g:
         g.seek(0)
-        if 'secret_scanner_results.txt\n' not in g and 'secret_scanner_detailed_report.txt\n' not in g:
-            g.write('secret_scanner_results.txt\n'+'secret_scanner_detailed_report.txt\n')
+        if 'secret_scanner_results.txt\n' not in g:
+            g.write('secret_scanner_results.txt\n')
+        if file_list and 'secret_scanner_detailed_report.txt\n' not in g:
+            g.write('secret_scanner_detailed_report.txt\n')
+
+
+def main(user_path, all_files):
+    os.path.normpath(user_path)
+    if os.path.isdir(user_path):
+        file_list = []
+        # check the size of the folder to scan
+        if len(glob.glob(user_path+'/**/*', recursive=True)) <= 200:
+            # generate a list of secret words to scan for
+            secret_words = generate_words()
+            # check if --all flag is used (to include all .gitignore files)
+            # get a list of files added to .gitignore (empty list if no .gitignore) to exclude them from scanning
+            if not all_files:
+                scan_ignore = ignore(user_path)
+            else:
+                scan_ignore = []
+            # scanning for files starting with '.' as they are not matched by default with glob.glob
+            dot_file_list, dot_not_open = scan(user_path+'/**/.*', scan_ignore, secret_words)
+            # scanning the rest of the files
+            file_list, not_open = scan(user_path + '/**/*', scan_ignore, secret_words)
+            # merge dot_file_list and file_list
+            file_list.extend(dot_file_list)
+            # merge dor_not_open and not_open
+            not_open.extend(dot_not_open)
+            # generate output values for different cases
+            if not file_list:
+                output = "No secrets found, good job! Keep an eye on them anyway as no tool is perfect."
+            else:
+                output = f"The scanner found {len(file_list)} possible secret exposure(s).\n" +\
+                         "\nThe following files could not be open and scanned: " + ', '.join(not_open) + '\n' +\
+                         "\nYou can see the detailed report in the 'secret_scanner_detailed_report.txt' file " +\
+                         "\n(generated in the scanned dir and added to .gitignore).\n" +\
+                         "\nThank you for using Secret Scanner! Hopefully your secrets will  be safe now."
+        else:
+            output = "The given directory is too large."
+        # write output to the terminal and text files
+        write_output(user_path, file_list, output)
+    else:
+        print("The given path is not found. Shall we try another one?", file=sys.stdout)
 
 
 if __name__ == '__main__':

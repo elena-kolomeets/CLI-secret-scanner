@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(
           'Run .exe or .py file in your terminal. Use -h/--help flag to get more information.',
     description='The program scans the files of the current or specified (with -p/--path) directory for secrets '
                 '(password, secret key etc.) that have not been hidden (e.g. added to .env). '
-                'By default files added to .gitignore are NOT scanned. You can change it by using the "--all" flag. '
+                'By default files added to .gitignore are NOT scanned. You can change it by using the -a/--all flag. '
                 'After scanning a summary of the results is given in "secret_scanner_results.txt" file '
                 'and in case secrets are found the detailed report is given in "secret_scanner_detailed_report.txt" file'
                 '(both generated in the scanned dir and added to .gitignore) '
@@ -27,7 +27,7 @@ parser.add_argument(
     metavar='[path]',
 )
 parser.add_argument(
-    '--all',
+    '-a', '--all',
     required=False,
     action='store_true',
     help='Use this flag to scan all files, including the files added to .gitignore (not scanned by default)',
@@ -82,12 +82,10 @@ def scan(userpath, scan_ignore, secret_words):
     :param userpath:
     :param scan_ignore: flag
     :param secret_words: list of secret words to scan for
-    :return: file_list: list of dictionaries with the results,
-             not_open: list of files that could not be open
+    :return: file_list: list of dictionaries with the results
     """
 
     file_list = []
-    not_open = []
     for name in glob.glob(userpath, recursive=True):
         if os.path.isdir(name) or os.path.relpath(name, start=userpath)[6:] in scan_ignore \
                 or os.path.basename(name) == 'secret_scanner_results.txt' \
@@ -101,10 +99,9 @@ def scan(userpath, scan_ignore, secret_words):
                             file_list.append({'file_name': os.path.relpath(name, start=userpath)[6:],
                                               'file_line': file_line})
         except Exception:
-            # creating the list of files that could not be open
-            not_open.append(os.path.relpath(name, start=userpath)[6:])
+            # continue scanning if some files could not be open (like images or executables)
             continue
-    return file_list, not_open
+    return file_list
 
 
 def write_output(user_path, file_list, output):
@@ -112,7 +109,6 @@ def write_output(user_path, file_list, output):
     print(output, file=sys.stdout)
     with open(user_path + '/' + 'secret_scanner_results.txt', mode='w') as f:
         f.write(output)
-
     # creating the file with detailed report of the scan results
     if file_list:
         with open(user_path + '/' + 'secret_scanner_detailed_report.txt', mode='w') as f1:
@@ -121,10 +117,12 @@ def write_output(user_path, file_list, output):
     # adding result and report files to .gitignore
     with open(user_path + '/.gitignore', mode='a+') as g:
         g.seek(0)
-        if 'secret_scanner_results.txt\n' not in g:
-            g.write('secret_scanner_results.txt\n')
-        if file_list and 'secret_scanner_detailed_report.txt\n' not in g:
-            g.write('secret_scanner_detailed_report.txt\n')
+        if '\nsecret_scanner_results.txt' not in g.read():
+            g.write('\nsecret_scanner_results.txt')
+        g.seek(0)
+        if file_list:
+            if '\nsecret_scanner_detailed_report.txt' not in g.read():
+                g.write('\nsecret_scanner_detailed_report.txt')
 
 
 def main(user_path, all_files):
@@ -132,35 +130,30 @@ def main(user_path, all_files):
     if os.path.isdir(user_path):
         file_list = []
         # check the size of the folder to scan
-        if len(glob.glob(user_path+'/**/*', recursive=True)) <= 200:
-            # generate a list of secret words to scan for
+        if len(glob.glob(user_path+'/**/*', recursive=True)) <= 1000:
             secret_words = generate_words()
-            # check if --all flag is used (to include all .gitignore files)
-            # get a list of files added to .gitignore (empty list if no .gitignore) to exclude them from scanning
+            # check if -a/--all flag is used (to include all .gitignore files)
             if not all_files:
                 scan_ignore = ignore(user_path)
             else:
                 scan_ignore = []
-            # scanning for files starting with '.' as they are not matched by default with glob.glob
-            dot_file_list, dot_not_open = scan(user_path+'/**/.*', scan_ignore, secret_words)
-            # scanning the rest of the files
-            file_list, not_open = scan(user_path + '/**/*', scan_ignore, secret_words)
+
+            dot_file_list = scan(user_path+'/**/.*', scan_ignore, secret_words)
+            file_list = scan(user_path + '/**/*', scan_ignore, secret_words)
+
             # merge dot_file_list and file_list
             file_list.extend(dot_file_list)
-            # merge dor_not_open and not_open
-            not_open.extend(dot_not_open)
+
             # generate output values for different cases
             if not file_list:
                 output = "No secrets found, good job! Keep an eye on them anyway as no tool is perfect."
             else:
-                output = f"The scanner found {len(file_list)} possible secret exposure(s).\n" +\
-                         "\nThe following files could not be open and scanned: " + ', '.join(not_open) + '\n' +\
+                output = f"The scanner found {len(file_list)} possible secret exposure(s)." +\
                          "\nYou can see the detailed report in the 'secret_scanner_detailed_report.txt' file " +\
-                         "\n(generated in the scanned dir and added to .gitignore).\n" +\
+                         "\n(generated in the scanned dir and added to .gitignore)." +\
                          "\nThank you for using Secret Scanner! Hopefully your secrets will  be safe now."
         else:
-            output = "The given directory is too large."
-        # write output to the terminal and text files
+            output = "The given directory is too large (virtualenv/venv might be the reason)."
         write_output(user_path, file_list, output)
     else:
         print("The given path is not found. Shall we try another one?", file=sys.stdout)

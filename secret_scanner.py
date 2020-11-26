@@ -1,7 +1,6 @@
 import glob
 import os
 import sys
-import json
 import argparse
 
 parser = argparse.ArgumentParser(
@@ -97,7 +96,7 @@ def scan(userpath, scan_ignore, secret_words):
                     for secret_word in secret_words:
                         if secret_word in file_line:
                             file_list.append({'file_name': os.path.relpath(name, start=userpath)[6:],
-                                              'file_line': file_line})
+                                              'file_line': file_line.strip()})
         except Exception:
             # continue scanning if some files could not be open (like images or executables)
             continue
@@ -113,7 +112,9 @@ def write_output(user_path, file_list, output):
     if file_list:
         with open(user_path + '/' + 'secret_scanner_detailed_report.txt', mode='w') as f1:
             for results in file_list:
-                json.dump(results, f1, indent=2)
+                f1.write('\n')
+                for key, value in results.items():
+                    f1.write(key + ': ' + value+'\n')
     # adding result and report files to .gitignore
     with open(user_path + '/.gitignore', mode='a+') as g:
         g.seek(0)
@@ -125,8 +126,9 @@ def write_output(user_path, file_list, output):
                 g.write('\nsecret_scanner_detailed_report.txt')
 
 
-def main(user_path, all_files):
-    os.path.normpath(user_path)
+def main(user_path_raw, all_files):
+    os.path.normpath(user_path_raw)
+    user_path = user_path_raw.replace(os.sep, '/')
     if os.path.isdir(user_path):
         file_list = []
         # check the size of the folder to scan
@@ -148,9 +150,9 @@ def main(user_path, all_files):
             if not file_list:
                 output = "No secrets found, good job! Keep an eye on them anyway as no tool is perfect."
             else:
-                output = f"The scanner found {len(file_list)} possible secret exposure(s)." +\
+                output = f"The scanner found {len(file_list)} possible secret exposure(s).\n" +\
                          "\nYou can see the detailed report in the 'secret_scanner_detailed_report.txt' file " +\
-                         "\n(generated in the scanned dir and added to .gitignore)." +\
+                         "\n(generated in the scanned dir and added to .gitignore).\n" +\
                          "\nThank you for using Secret Scanner! Hopefully your secrets will  be safe now."
         else:
             output = "The given directory is too large (virtualenv/venv might be the reason)."

@@ -30,6 +30,7 @@ Optional arguments:
 1. The tool scans for a combination of words like "password", "key", "database-url" and their variations with ":", "=", "is" with or without whitespace. There is currently no check for false positives. 
 2. The tool scans directories containing not more than 1000 files. (Make sure virtualenv/venv dir is not inside.) In case your dir is too big the tool will let you know.
 
-**Thank you**
+***
 
+The plan is to modify the tool to scan for password- and key-like sequences (working on it).
 Feel free to use the tool and reach out with improvement suggestions.

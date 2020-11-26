@@ -33,4 +33,5 @@ Optional arguments:
 ***
 
 The plan is to modify the tool to scan for password- and key-like sequences (working on it).
+
 Feel free to use the tool and reach out with improvement suggestions.

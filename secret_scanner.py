@@ -56,7 +56,7 @@ def ignore(user_path):
                     gitignore.append(line)
         for i in gitignore:
             i = user_path + '/**/' + i + '*'
-            for j in glob.glob(i, recursive=True):
+            for j in glob.iglob(i, recursive=True):
                 ignore_list.append(os.path.relpath(j, start=user_path))
     return ignore_list
 
@@ -67,7 +67,7 @@ def generate_words():
     :return: the list of secret words and expressions
     """
     words_case, secret_words = [], []
-    for word in ['password', 'pass', 'key', 'credential', 'database_url', 'database-url', 'db_url', 'db-url']:
+    for word in ['password', 'pass', 'key', 'token', 'credential', 'database_url', 'database-url', 'db_url', 'db-url']:
         words_case.extend((word, word.upper(), word.capitalize()))
     for word in words_case:
         secret_words.extend((word + ':', word + ' :', word + '=', word + ' =', word + ' is'))
@@ -85,7 +85,7 @@ def scan(userpath, scan_ignore, secret_words):
     """
 
     file_list = []
-    for name in glob.glob(userpath, recursive=True):
+    for name in glob.iglob(userpath, recursive=True):
         if os.path.isdir(name) or os.path.relpath(name, start=userpath)[6:] in scan_ignore \
                 or os.path.basename(name) == 'secret_scanner_results.txt' \
                 or os.path.basename(name) == 'secret_scanner_detailed_report.txt':
@@ -132,7 +132,7 @@ def main(user_path_raw, all_files):
     if os.path.isdir(user_path):
         file_list = []
         # check the size of the folder to scan
-        if len(glob.glob(user_path+'/**/*', recursive=True)) <= 1000:
+        if len(glob.glob(user_path+'/**/*', recursive=True)) <= 3000:
             secret_words = generate_words()
             # check if -a/--all flag is used (to include all .gitignore files)
             if not all_files:
@@ -155,7 +155,7 @@ def main(user_path_raw, all_files):
                          "\n(generated in the scanned dir and added to .gitignore).\n" +\
                          "\nThank you for using Secret Scanner! Hopefully your secrets will  be safe now."
         else:
-            output = "The given directory is too large (virtualenv/venv might be the reason)."
+            output = "The given directory is too large."
         write_output(user_path, file_list, output)
     else:
         print("The given path is not found. Shall we try another one?", file=sys.stdout)

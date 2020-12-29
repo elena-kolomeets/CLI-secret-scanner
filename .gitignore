@@ -1,9 +1,10 @@
-.DS_Store
 .idea/
 **__pycache__/
 *.spec
 build/
 dist/
-**bin/
-*.sh
 venv/
+*.png
+.env
+secret_scanner_results.txt
+secret_scanner_detailed_report.txt

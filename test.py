@@ -1,6 +1,8 @@
 import re
 import os
 
+# this module is dedicated to figuring out the regex to detect password-like sequences in the files
+
 raw_path = input()
 path = raw_path.replace(os.sep, '/')
 lines = []

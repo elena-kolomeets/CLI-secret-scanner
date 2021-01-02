@@ -1,21 +1,28 @@
 ## CLI-secret-scanner
 Command-line tool for scanning project directory for secrets that should not be shared
 
+### secret_scanner.py or secret_scanner.exe:
+*using my own secret scanning algorithm*
+### gg_secret_scanner.py or gg_secret_scanner.exe:
+*using [GitGuardian API](https://github.com/GitGuardian/py-gitguardian) secret scanning algorithm*
+
 **Description**
 
-The program scans all files in all subdirectories of the current or specified directory for secrets (password, secret key etc.) 
-that have not been hidden (e.g. added to .env) locally.
+Both programs scan all files in all subdirectories of the current or specified directory for secrets (password, secret key etc.) 
+that have not been hidden (e.g. added to .env) locally. 
 
 By default files added to .gitignore are NOT scanned but you can change it.
 
 After scanning a summary of the results is written in the terminal and in "secret_scanner_results.txt" file.
-In case secrets are found the detailed report is given in "secret_scanner_detailed_report.txt" file.
-Both files are generated in the scanned dir and added to .gitignore (created if does not exist).
+In case secrets are found the detailed report is given in the same file which is generated in the scanned folder
+and added to .gitignore (created if does not exist).
 
 
 **How to use**  
 
-Run .exe or .py file in your terminal. Without arguments the current directory will be scanned and files added to .gitignore will be ignored.
+To use both programs run .exe or .py file **in your terminal**. 
+Without arguments the current directory will be scanned, 
+and files added to .gitignore will be ignored. The same happens if you just execute .exe files.
 
 Optional arguments:
 
@@ -27,11 +34,16 @@ Optional arguments:
 
 **Limitations**
 
-1. The tool scans for a combination of words like "password", "key", "database-url" and their variations with ":", "=", "is" with or without whitespace. There is currently no check for false positives. 
-2. The tool scans directories containing not more than 1000 files. (Make sure virtualenv/venv dir is not inside.) In case your dir is too big the tool will let you know.
+1. The **secret_scanner** scans file names and texts for a combination of words like *"password", "key", "token", "database-url"* 
+   and their variations with *":", "=", "_", "is"*, with or without whitespace,
+   and a regular expression for password/key-like strings. It does not find standalone passwords/keys in the text. 
+2. The **gg_secret_scanner** does not find short simple passwords/keys even if they have the word "password" etc. in front of them. 
+   Some standalone keys can be missed as well.
+3. Both tools scans directories containing not more than *3000 files*. (Make sure virtualenv/venv dir is not inside.) 
+   In case your dir is too big the tool will let you know.
+
+The best approach is to use both tools and compare results.
 
 ***
 
-The plan is to modify the tool to scan for password- and key-like sequences (working on it).
-
-Feel free to use the tool and reach out with improvement suggestions.
+Feel free to use the tools and reach out with improvement suggestions.

@@ -7,4 +7,4 @@ venv/
 *.png
 .env
 secret_scanner_results.txt
-secret_scanner_detailed_report.txt
+gg_secret_scanner_results.txt
